@@ -1,0 +1,11 @@
+Manual installs are detected again:
+
+* An app installed manually (outside RepoStore) could get stuck on "Open" forever: if the
+  pre-release APK shipped without a usable versionName, update detection had nothing to
+  compare and always answered "no update". The versionCode is used as a fallback, and
+  numeric release tags compare against it directly.
+* Detection for apps whose package name carries no owner token (Mullvad, many others) no
+  longer falls through: an exact label match on the repository name or an installed
+  version that agrees with the release being viewed now confirms the match, while wrong
+  apps stay rejected.
+* All previous features unchanged.

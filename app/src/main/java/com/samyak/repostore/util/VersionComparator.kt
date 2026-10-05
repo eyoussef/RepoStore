@@ -14,6 +14,16 @@ object VersionComparator {
      * @return true if latestVersion is newer than installedVersion
      */
     fun isNewerVersion(installedVersion: String, latestVersion: String): Boolean {
+        // When the installed package has no usable versionName the comparator works on
+        // versionCode only — but a release tag is a string, not a number, so without a
+        // numeric tag there is nothing to compare and the caller must treat it as
+        // "cannot confirm" rather than "up to date" (issue #46).
+        if (isCodeOnly(installedVersion)) {
+            val installedCode = extractVersionCode(installedVersion) ?: return false
+            val tagCode = latestVersion.trim().toLongOrNull() ?: return false
+            return tagCode > installedCode
+        }
+
         val installedCore = normalizeVersion(installedVersion)
         val latestCore = normalizeVersion(latestVersion)
         
@@ -130,7 +140,20 @@ object VersionComparator {
         
         // Remove leading/trailing dots
         normalized = normalized.trim('.')
-        
+
         return normalized
     }
+
+    /**
+     * True when the comparison has to fall back to versionCode-only matching: the
+     * installed version carries a "code:<n>" marker (no usable versionName) or the
+     * release tag is a bare build number.
+     */
+    fun isCodeOnly(version: String): Boolean = version.trim().startsWith("code:")
+
+    /**
+     * Extract the bare versionCode from a "code:<n>" marker, or null when absent.
+     */
+    fun extractVersionCode(version: String): Long? =
+        version.trim().removePrefix("code:").toLongOrNull()
 }

@@ -605,9 +605,10 @@ class AppInstaller private constructor(private val context: Context) {
     }
 
     /**
-     * Get the installed version of a package
-     * @param packageName The package name to check
-     * @return The version name string, or null if not installed
+     * Get the installed version of a package.
+     * Falls back to "code:<versionCode>" when the versionName is absent or blank: some
+     * pre-release APKs (e.g. Mullvad beta builds) ship without a usable versionName,
+     * which previously made update detection report "no update" forever (issue #46).
      */
     fun getInstalledVersion(packageName: String): String? {
         return try {
@@ -617,7 +618,8 @@ class AppInstaller private constructor(private val context: Context) {
                 @Suppress("DEPRECATION")
                 context.packageManager.getPackageInfo(packageName, 0)
             }
-            packageInfo.versionName
+            packageInfo.versionName?.takeIf { it.isNotBlank() }
+                ?: packageInfo.longVersionCode.takeIf { it > 0 }?.let { "code:$it" }
         } catch (e: PackageManager.NameNotFoundException) {
             null
         }
@@ -805,17 +807,40 @@ class AppInstaller private constructor(private val context: Context) {
         // Heuristic: Score must be reasonable
         // e.g., if we matched "calculator" but nothing else, score might be low if owner mismatched
         Log.d(TAG, "Best heuristic match for $ownerName/$repoName: $bestMatch (score=$bestScore)")
-        
-        // Threshold: adjust as needed. 
+
+        // Threshold: adjust as needed.
         // If score > 0.5, it means significant overlap.
         // For "FossifyOrg/Calculator" vs "org.fossify.calculator":
         // Tokens: [fossify, org], [calculator]
         // Pkg Tokens: [org, fossify, calculator]
         // Match: fossify(1), org(1), calculator(1). Full match.
-        
+
         // Threshold: increased to 0.75 for better precision
-        if (bestScore > 0.75) { 
+        if (bestScore > 0.75) {
             return bestMatch
+        }
+
+        // Last-resort acceptance for apps installed outside RepoStore (issue #46):
+        // a manually installed GitHub app frequently has a package name with no owner
+        // token in it (e.g. "Mullvad" → net.mullvad.mullvadvpn), which caps the fuzzy
+        // score below the threshold even though the app is clearly the match. Accept
+        // it when the exact repository name is visible and the version agrees with
+        // the expected version from the release we came from.
+        if (bestMatch != null && bestScore in 0.4..0.75) {
+            val label = try { pm.getApplicationLabel(pm.getApplicationInfo(bestMatch, 0)).toString() } catch (e: Exception) { "" }
+            val exactLabel = label.lowercase().replace(Regex("[^a-z0-9]"), "") ==
+                repoName.lowercase().replace(Regex("[^a-z0-9]"), "")
+            // Version agreement: the installed version matches or is older than the
+            // release we're looking at (i.e. "not newer" — a stale install counts:
+            // that's exactly the "Open instead of Update" case this branch fixes).
+            val versionAgrees = expectedVersion != null && run {
+                val installed = getInstalledVersion(bestMatch)
+                installed != null && !VersionComparator.isNewerVersion(installed, expectedVersion)
+            }
+            if (exactLabel || versionAgrees) {
+                Log.d(TAG, "Accepting manual-install match $bestMatch (exactLabel=$exactLabel, versionAgrees=$versionAgrees, score=$bestScore)")
+                return bestMatch
+            }
         }
         return null
     }

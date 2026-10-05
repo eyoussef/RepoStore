@@ -93,6 +93,9 @@ class AppUpdatesViewModel(
                     val latestTag = release.tagName.takeIf { it.isNotBlank() } ?: return@async null
 
                     if (!VersionComparator.isNewerVersion(installedVersion, latestTag)) return@async null
+                    // isNewerVersion already handles "code:<n>" installed versions; a tag
+                    // that parses as pure number is compared against the code — anything
+                    // else is treated as not comparable and yields false upstream.
 
                     val asset = when (val selection = ApkArchitectureHelper.selectBestApk(release.assets)) {
                         is ApkSelectionResult.Single -> selection.asset
