@@ -66,7 +66,13 @@ class VersionComparatorTest {
 
     @Test
     fun `zero-padded components compare numerically`() {
+        // "08" and "8" are the same component numerically; the pre-release on the same
+        // core is older than the stable, so a stable v2026.8 wins over 2026.08-beta1.
         assertTrue(VersionComparator.isNewerVersion("2026.08-beta1", "v2026.9"))
-        assertFalse(VersionComparator.isNewerVersion("2026.08-beta1", "v2026.8"))
+        assertTrue(VersionComparator.isNewerVersion("2026.08-beta1", "v2026.8"))
+        // A newer pre-release of a higher component is still detected.
+        assertTrue(VersionComparator.isNewerVersion("2026.08-beta1", "v2026.9-beta1"))
+        // Downgrade stays a downgrade.
+        assertFalse(VersionComparator.isNewerVersion("2026.09-beta1", "v2026.8"))
     }
 }

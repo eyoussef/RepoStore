@@ -51,9 +51,10 @@ class ManualInstallDetectionTest {
             PackageInfo().apply {
                 packageName = pkg
                 versionName = info.versionName
-                val field = PackageInfo::class.java.getDeclaredField("longVersionCode")
-                field.isAccessible = true
-                field.set(this, info.versionCode)
+                // Plain JVM test: only the int `versionCode` field exists; the
+                // code-only fallback path reads it via "code:<n>" versionName.
+                @Suppress("DEPRECATION")
+                versionCode = info.versionCode.toInt()
             }
         }
 
@@ -76,7 +77,7 @@ class ManualInstallDetectionTest {
         // findPackage step 2 performs a network lookup; force it to fall through
         // to the fuzzy scan so these tests exercise detection logic only.
         mockkObject(PackageIdFetcher)
-        every {
+        coEvery {
             PackageIdFetcher.fetchPackageId(any(), any(), any(), any())
         } throws RuntimeException("offline in tests")
     }
